@@ -15,7 +15,8 @@ import random
 import copy
 from math import sqrt
 import utils
-from dataclasses import dataclass
+from utils import PriorityQueue
+
 
 # Useful constants
 EAT = 'eat'
@@ -100,6 +101,7 @@ class GoalBasedBrain( TortoiseBrain ):
     grid = []
     positionDog = [-1,-1]
     grid_size = 0;
+    pathToFollow = []
     caseToGo = (1,1)
 
     def updateAheadTile(self, sensor):
@@ -128,62 +130,11 @@ class GoalBasedBrain( TortoiseBrain ):
         else :
             self.grid[y][x] = SAND
 
-    def distanceFromTheTurtle(self, sensor, title_x, title_y):
-        x, y = sensor.tortoise_position
-        distance = (abs(x-title_x))+(abs(y-title_y))
-        return distance
-
-    def nextUnexplored2(self, sensor):
-        x,y = sensor.tortoise_position
-        for i in range(4):
-            next_x = x+DIRECTIONTABLE[i][0]
-            next_y = y+DIRECTIONTABLE[i][1]
-            if self.grid[next_y][next_x] == UNEXPLORED:
-                self.caseToGo = (next_x, next_y)
-                return next_x, next_y
-        return None #Lancer algo recherche de chemin
-
-
-    
-    def nextUnexplored(self, sensor):
-        unexplored_x=-1
-        unexplored_y=-1
-        distance=1e30
-        x, y = sensor.tortoise_position
-        for i in range(self.grid_size):
-            for j in range(self.grid_size):
-                if self.grid[i][j]==UNEXPLORED and self.distanceFromTheTurtle(sensor, i, j) < distance:
-                    unexplored_x, unexplored_y = j,i
-                    distance=self.distanceFromTheTurtle(sensor, i, j)
-        if unexplored_x == -1:
-            return None #no water title has been found, turtle must continue its exploration
-        self.caseToGo = (unexplored_x, unexplored_y)
-        return unexplored_x, unexplored_y
-
-
-    def findClosestWater(self, sensor):
-        water_x=-1
-        water_y=-1
-        distance=1e30
-        x, y = sensor.tortoise_position
-        for i in range(self.grid_size):
-            for j in range(self.grid_size):
-                if self.grid[i][j]==WATER and self.distanceFromTheTurtle(sensor, i, j) < distance:
-                    water_x, water_y = i, j
-                    distance=self.distanceFromTheTurtle(sensor, i, j)
-        if water_x == -1:
-            return None #no water title has been found, turtle must continue its exploration
-        self.caseToGo = (water_x, water_y)
-        return water_x, water_y
-
-    
-    def getActionDirection(self, sensor, x,y):
+    def getActionDirection(self, currentX, currentY , nextX, nextY):
         currentX, currentY = sensor.tortoise_position   
-        dx = currentX - x
-        dy = currentY - y
+        dx = currentX - nextX
+        dy = currentY - nextY
         directionTortoise = sensor.tortoise_direction
-        print("x :"+str(x)+" y :"+str(y),end="\n")
-        print("currentX :"+str(currentX)+" currentY :"+str(currentY),end="\n")
         if(dx == 0):
             if(dy < 0):
                 if(directionTortoise == SOUTH):
@@ -231,31 +182,37 @@ class GoalBasedBrain( TortoiseBrain ):
         x, y = sensor.tortoise_position
         if(action == EAT):
             self.grid[x][y] = SAND
-    
 
-    def findBestActionToDo(self, sensor):
-        
-        if(sensor.lettuce_here):
-            return EAT
-        if(sensor.lettuce_ahead):
-            return FORWARD
-        if(sensor.drink_level < 50):
-            x, y = sensor.tortoise_position
-            if self.grid[x][y]==WATER:
-                print("J'AI BU")
-                return DRINK
+    def getSuccessorsSquare(self, square, direction):
+        successors = []
+        x,y = square
+        if(self.grid[x + DIRECTIONTABLE[direction][0]][y + DIRECTIONTABLE[direction][1]] != WALL and self.grid[x + DIRECTIONTABLE[direction][0]][y + DIRECTIONTABLE[direction][1]] != ROCK ):
+            successors.append(( (x + DIRECTIONTABLE[direction][0], y + DIRECTIONTABLE[direction][1]), direction, FORWARD))
+        successors.append(((x,y), (direction - 1) % 4, LEFT))
+        successors.append(((x,y), (direction + 1) % 4, RIGHT))
+        return successors
+
+    def findPath(self, sensor):
+        open_list = PriorityQueue()
+        open_list.push([(sensor.tortoise_position, sensor.tortoise_direction, None)], 0)
+        closed_list = set([(sensor.tortoise_position, sensor.tortoise_direction)])
+
+        while not open_list.isEmpty():
+            current_path, cost = open_list.pop()
+            current_square, current_direction, current_action = current_path[-1]
+
+            if self.grid[current_square[0]][current_square[1]] == UNEXPLORED:
+                print("ici")
+                print(current_path)
+                return (list (map(lambda x : x[2], current_path[1:])))
             else:
-                print("J'AI SOIF")
-                co= self.findClosestWater(sensor) 
-                if(co == None):
-                    return WAIT
-                return self.getActionDirection(sensor,co[0],co[1])
-        else: 
-            co = self.nextUnexplored(sensor)
-            if(co == None):
-                return WAIT
-            return self.getActionDirection(sensor,co[0],co[1])
-
+                next_steps = self.getSuccessorsSquare(current_square, current_direction)
+                for case, direction, action in next_steps:
+                    if (case,direction) not in closed_list:
+                        closed_list.add((case,direction))
+                        open_list.push((current_path + [(case,direction,action)]), 0)
+        return []
+        print("Slt")
 
     def init( self, grid_size ):
         # *** YOUR CODE HERE ***"
@@ -302,23 +259,14 @@ class GoalBasedBrain( TortoiseBrain ):
         """
 
         # *** YOUR CODE HERE ***"
-        self.updateAheadTile(sensor)
         xTortoise, yTortoise = sensor.tortoise_position
         if(self.grid[yTortoise][xTortoise] == UNEXPLORED):
+            print("Bonjour")
             self.updateCurrentTitle(sensor)
-        if(self.caseToGo == sensor.tortoise_position or self.grid[self.caseToGo[1]][self.caseToGo[0]] == ROCK):
-            print("Je suis ici")
-            action = self.findBestActionToDo(sensor)
-        else:
-            action = self.getActionDirection(sensor, self.caseToGo[0],self.caseToGo[1])
-        if(action == WAIT):
-            for i in range(self.grid_size):
-                for j in range(self.grid_size):
-                    print(self.grid[i][j],end=" ")
-                print("\n")
-        self.updateGridAfterEating(sensor, action)
-        # for i in range(self.grid_size):
-        #     for j in range(self.grid_size):
-        #         print(self.grid[i][j],end=" ")
-            # print("\n")
+        if(self.pathToFollow == []):
+            self.pathToFollow = self.findPath(sensor)
+        if(sensor.lettuce_here):
+            return EAT
+        print(self.pathToFollow)
+        action = self.pathToFollow.pop(0)
         return action
