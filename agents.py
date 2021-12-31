@@ -29,9 +29,8 @@ WAIT = 'wait'
 UNEXPLORED = -1
 WALL = 0
 SAND = 1
-ROCK = 2
-LETTUCE = 3
-WATER = 4
+LETTUCE = 2
+WATER = 3
 
 NORTH = 0
 EAST = 1
@@ -117,8 +116,8 @@ class GoalBasedBrain( TortoiseBrain ):
         elif sensor.free_ahead :
             self.grid[y][x] = SAND
         else :
-            if(self.grid[y][x] != WALL):
-                self.grid[y][x] = ROCK
+            self.grid[y][x] = WALL
+                
         
         
     def updateCurrentTitle(self, sensor):
@@ -138,13 +137,13 @@ class GoalBasedBrain( TortoiseBrain ):
     def getSuccessorsSquare(self, square, direction):
         successors = []
         x,y = square
-        if(self.grid[y + DIRECTIONTABLE[direction][1]][x + DIRECTIONTABLE[direction][0]] != WALL and self.grid[y + DIRECTIONTABLE[direction][0]][x + DIRECTIONTABLE[direction][1]] != ROCK ):
-            successors.append(( (x + DIRECTIONTABLE[direction][0], y + DIRECTIONTABLE[direction][1]), direction, FORWARD))
-        successors.append(((x,y), (direction - 1) % 4, LEFT))
-        successors.append(((x,y), (direction + 1) % 4, RIGHT))
+        if(self.grid[y + DIRECTIONTABLE[direction][1]][x + DIRECTIONTABLE[direction][0]] != WALL ):
+            successors.append(( (x + DIRECTIONTABLE[direction][0], y + DIRECTIONTABLE[direction][1]), direction, FORWARD, 2))
+        successors.append(((x,y), (direction - 1) % 4, LEFT, 1))
+        successors.append(((x,y), (direction + 1) % 4, RIGHT, 1))
         return successors
 
-    def findPath(self, sensor):
+    def findPath(self, sensor, goalSquare):
         open_list = PriorityQueue()
         open_list.push([(sensor.tortoise_position, sensor.tortoise_direction, None)], 0)
         closed_list = set([(sensor.tortoise_position, sensor.tortoise_direction)])
@@ -153,19 +152,20 @@ class GoalBasedBrain( TortoiseBrain ):
             current_path, cost = open_list.pop()
             current_square, current_direction, current_action = current_path[-1]
 
-            if self.grid[current_square[1]][current_square[0]] == UNEXPLORED:
+            if self.grid[current_square[1]][current_square[0]] == goalSquare:
                 
                 return (list (map(lambda x : x[2], current_path[1:])))
             else:
                 next_steps = self.getSuccessorsSquare(current_square, current_direction)
-                for case, direction, action in next_steps:
+                for case, direction, action, weigth in next_steps:
                     if (case,direction) not in closed_list:
                         closed_list.add((case,direction))
-                        open_list.push((current_path + [(case,direction,action)]), 0)
+                        open_list.push((current_path + [(case,direction,action)]), cost+weigth)
         return []
 
     def init( self, grid_size ):
         # *** YOUR CODE HERE ***"
+        self.grid = []
         self.grid_size = grid_size
         for i in range(grid_size):
             tmp = []
@@ -215,22 +215,30 @@ class GoalBasedBrain( TortoiseBrain ):
         if(self.grid[yTortoise][xTortoise] == UNEXPLORED):
             self.updateCurrentTitle(sensor)
         self.updateAheadTile(sensor)
-        #If we have no path to follow, we have to recalc a new one.
-        if(self.pathToFollow == []):
-            self.pathToFollow = self.findPath(sensor)
-        # If at anytime the turtoise is block by a wall or a rock, we have to change our path.
-        if(not sensor.free_ahead and self.pathToFollow[0] == FORWARD):
-            self.pathToFollow = self.findPath(sensor)
-    
+
         if(sensor.lettuce_here): # Of course, the tortoise has to eat the lettuce.
             self.updateGridAfterEating(sensor)
             return EAT
+        if(sensor.lettuce_ahead): #A lettuce has been found, we have to eat it.
+            self.pathToFollow = [] # We suppress the path that we had to follow
+            return FORWARD # It will be eaten during the next turn.
         if(sensor.water_here and sensor.drink_level < 90): # Drink only if necesseray.
             return DRINK
+        if(sensor.drink_level < 50): # Find the closest water source of the turtoise.
+            pathToWater = self.findPath(sensor, WATER)
+            if(pathToWater != []): # Only if a water has been found, we change our path.
+                self.pathToFollow = pathToWater
         
+        #If we have no path to follow, we have to recalculate a new one.
+        if(self.pathToFollow == []):
+            self.pathToFollow = self.findPath(sensor, UNEXPLORED)
+        # If at anytime the turtoise is block by a wall or a rock, we have to change our path.
+        if(not sensor.free_ahead and self.pathToFollow[0] == FORWARD):
+            self.pathToFollow = self.findPath(sensor, UNEXPLORED)
+
         action = self.pathToFollow.pop(0)
-        for i in range(self.grid_size):
-            for j in range(self.grid_size):
-                print(self.grid[i][j],end=" ")
-            print("\n")
+        # for i in range(self.grid_size):
+        #     for j in range(self.grid_size):
+        #         print(self.grid[i][j],end=" ")
+        #     print("\n")
         return action
