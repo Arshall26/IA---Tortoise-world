@@ -15,8 +15,8 @@ import random
 import copy
 from math import sqrt
 import utils
+import time
 from utils import PriorityQueue
-
 
 # Useful constants
 EAT = 'eat'
@@ -120,6 +120,7 @@ class GoalBasedBrain( TortoiseBrain ):
             if(self.grid[y][x] != WALL):
                 self.grid[y][x] = ROCK
         
+        
     def updateCurrentTitle(self, sensor):
         x, y = sensor.tortoise_position
        
@@ -130,63 +131,14 @@ class GoalBasedBrain( TortoiseBrain ):
         else :
             self.grid[y][x] = SAND
 
-    def getActionDirection(self, currentX, currentY , nextX, nextY):
-        currentX, currentY = sensor.tortoise_position   
-        dx = currentX - nextX
-        dy = currentY - nextY
-        directionTortoise = sensor.tortoise_direction
-        if(dx == 0):
-            if(dy < 0):
-                if(directionTortoise == SOUTH):
-                    return FORWARD
-                if(directionTortoise == EAST):
-                    return RIGHT
-                return LEFT
-            else: 
-                if(directionTortoise == NORTH):
-                    return FORWARD
-                if(directionTortoise == WEST):
-                    return RIGHT
-                return LEFT
-        if(dy == 0):
-            if(dx < 0):
-                if(directionTortoise == EAST):
-                    return FORWARD
-                if(directionTortoise == SOUTH):
-                    return LEFT
-                return RIGHT
-            else:
-                if(directionTortoise == WEST):
-                    return FORWARD
-                if(directionTortoise == SOUTH):
-                    return RIGHT
-                return LEFT
-        if(directionTortoise == SOUTH and dy < 0):
-            return FORWARD
-        if(directionTortoise == NORTH and dy > 0):
-            return FORWARD
-        if(dx < 0):
-            if(directionTortoise == EAST):
-                return FORWARD
-            if(directionTortoise == SOUTH):
-                return LEFT
-            return RIGHT
-        else:
-            if(directionTortoise == WEST):
-                return FORWARD
-            if(directionTortoise == SOUTH):
-                return RIGHT
-            return LEFT
-
-    def updateGridAfterEating(self, sensor, action):
+    def updateGridAfterEating(self, sensor):
         x, y = sensor.tortoise_position
-        if(action == EAT):
-            self.grid[x][y] = SAND
+        self.grid[y][x] = SAND
 
     def getSuccessorsSquare(self, square, direction):
         successors = []
         x,y = square
-        if(self.grid[x + DIRECTIONTABLE[direction][0]][y + DIRECTIONTABLE[direction][1]] != WALL and self.grid[x + DIRECTIONTABLE[direction][0]][y + DIRECTIONTABLE[direction][1]] != ROCK ):
+        if(self.grid[y + DIRECTIONTABLE[direction][1]][x + DIRECTIONTABLE[direction][0]] != WALL and self.grid[y + DIRECTIONTABLE[direction][0]][x + DIRECTIONTABLE[direction][1]] != ROCK ):
             successors.append(( (x + DIRECTIONTABLE[direction][0], y + DIRECTIONTABLE[direction][1]), direction, FORWARD))
         successors.append(((x,y), (direction - 1) % 4, LEFT))
         successors.append(((x,y), (direction + 1) % 4, RIGHT))
@@ -201,9 +153,8 @@ class GoalBasedBrain( TortoiseBrain ):
             current_path, cost = open_list.pop()
             current_square, current_direction, current_action = current_path[-1]
 
-            if self.grid[current_square[0]][current_square[1]] == UNEXPLORED:
-                print("ici")
-                print(current_path)
+            if self.grid[current_square[1]][current_square[0]] == UNEXPLORED:
+                
                 return (list (map(lambda x : x[2], current_path[1:])))
             else:
                 next_steps = self.getSuccessorsSquare(current_square, current_direction)
@@ -212,7 +163,6 @@ class GoalBasedBrain( TortoiseBrain ):
                         closed_list.add((case,direction))
                         open_list.push((current_path + [(case,direction,action)]), 0)
         return []
-        print("Slt")
 
     def init( self, grid_size ):
         # *** YOUR CODE HERE ***"
@@ -259,14 +209,28 @@ class GoalBasedBrain( TortoiseBrain ):
         """
 
         # *** YOUR CODE HERE ***"
+
+        #Update the tile underneath and ahead of the turtoise
         xTortoise, yTortoise = sensor.tortoise_position
         if(self.grid[yTortoise][xTortoise] == UNEXPLORED):
-            print("Bonjour")
             self.updateCurrentTitle(sensor)
+        self.updateAheadTile(sensor)
+        #If we have no path to follow, we have to recalc a new one.
         if(self.pathToFollow == []):
             self.pathToFollow = self.findPath(sensor)
-        if(sensor.lettuce_here):
+        # If at anytime the turtoise is block by a wall or a rock, we have to change our path.
+        if(not sensor.free_ahead and self.pathToFollow[0] == FORWARD):
+            self.pathToFollow = self.findPath(sensor)
+    
+        if(sensor.lettuce_here): # Of course, the tortoise has to eat the lettuce.
+            self.updateGridAfterEating(sensor)
             return EAT
-        print(self.pathToFollow)
+        if(sensor.water_here and sensor.drink_level < 90): # Drink only if necesseray.
+            return DRINK
+        
         action = self.pathToFollow.pop(0)
+        for i in range(self.grid_size):
+            for j in range(self.grid_size):
+                print(self.grid[i][j],end=" ")
+            print("\n")
         return action
