@@ -102,6 +102,7 @@ class GoalBasedBrain( TortoiseBrain ):
     grid_size = 0;
     pathToFollow = []
     caseToGo = (1,1)
+    dogx, dogy = (0,0)
 
     def updateAheadTile(self, sensor):
         direction=sensor.tortoise_direction
@@ -143,10 +144,20 @@ class GoalBasedBrain( TortoiseBrain ):
         successors.append(((x,y), (direction + 1) % 4, RIGHT, 1))
         return successors
 
+    def heuristicDog(self, x,y):
+        distance = (abs(x-self.dogx))+(abs(y-self.dogy))
+        if(distance == 0):
+            return 1
+        else:
+            return 1/distance
+        return distance
+
     def findPath(self, sensor, goalSquare):
         open_list = PriorityQueue()
-        open_list.push([(sensor.tortoise_position, sensor.tortoise_direction, None)], 0)
+        startHeuristic = self.heuristicDog(sensor.tortoise_position[0],sensor.tortoise_position[1])
+        open_list.push([(sensor.tortoise_position, sensor.tortoise_direction, None)], startHeuristic)
         closed_list = set([(sensor.tortoise_position, sensor.tortoise_direction)])
+
 
         while not open_list.isEmpty():
             current_path, cost = open_list.pop()
@@ -157,10 +168,13 @@ class GoalBasedBrain( TortoiseBrain ):
                 return (list (map(lambda x : x[2], current_path[1:])))
             else:
                 next_steps = self.getSuccessorsSquare(current_square, current_direction)
+                hueristicDogCurrentSquare = self.heuristicDog(current_square[0], current_square[1])
+
                 for case, direction, action, weigth in next_steps:
                     if (case,direction) not in closed_list:
                         closed_list.add((case,direction))
-                        open_list.push((current_path + [(case,direction,action)]), cost+weigth)
+                        heuristicDog =  self.heuristicDog(case[0], case[1])
+                        open_list.push((current_path + [(case,direction,action)]), cost - hueristicDogCurrentSquare + weigth + heuristicDog)
         return []
 
     def init( self, grid_size ):
@@ -212,6 +226,14 @@ class GoalBasedBrain( TortoiseBrain ):
 
         #Update the tile underneath and ahead of the turtoise
         xTortoise, yTortoise = sensor.tortoise_position
+        (dx, dy) = DIRECTIONTABLE[sensor.tortoise_direction]
+        if dx == 0:
+            self.dogx = xTortoise - dy * sensor.dog_right
+            self.dogy = yTortoise + dy * sensor.dog_front
+        else:
+            self.dogx = xTortoise + dx * sensor.dog_front
+            self.dogy = yTortoise + dx * sensor.dog_right
+        
         if(self.grid[yTortoise][xTortoise] == UNEXPLORED):
             self.updateCurrentTitle(sensor)
         self.updateAheadTile(sensor)
