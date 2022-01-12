@@ -146,16 +146,12 @@ class GoalBasedBrain( TortoiseBrain ):
 
     def heuristicDog(self, x,y):
         distance = (abs(x-self.dogx))+(abs(y-self.dogy))
-        if(distance == 0):
-            return 3
-        else:
-            return 2+1/distance
-        return distance
+        return 1/(distance+1)
 
     def findPath(self, sensor, goalSquare):
         open_list = PriorityQueue()
         startHeuristic = self.heuristicDog(sensor.tortoise_position[0],sensor.tortoise_position[1])
-        open_list.push([(sensor.tortoise_position, sensor.tortoise_direction, None)], (0,0,startHeuristic))
+        open_list.push([(sensor.tortoise_position, sensor.tortoise_direction, None)], (0,startHeuristic))
         closed_list = set([(sensor.tortoise_position, sensor.tortoise_direction)])
 
 
@@ -167,13 +163,13 @@ class GoalBasedBrain( TortoiseBrain ):
                 return (list (map(lambda x : x[2], current_path[1:])))
             else:
                 next_steps = self.getSuccessorsSquare(current_square, current_direction)
-                hueristicDogCurrentSquare = self.heuristicDog(current_square[0], current_square[1])
+                heuristicDogCurrentSquare = self.heuristicDog(current_square[0], current_square[1])
 
                 for case, direction, action, weigth in next_steps:
                     if (case,direction) not in closed_list:
                         closed_list.add((case,direction))
                         heuristicDog =  self.heuristicDog(case[0], case[1])
-                        open_list.push((current_path + [(case,direction,action)]), (cost[0]+1, cost[1]+weigth,cost[2]- hueristicDogCurrentSquare + heuristicDog) )
+                        open_list.push((current_path + [(case,direction,action)]), (cost[0]+1, cost[1]+weigth - heuristicDogCurrentSquare + heuristicDog) )
         return []
 
     def init( self, grid_size ):
